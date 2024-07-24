@@ -20,11 +20,12 @@ public class AddActorHandler implements HttpHandler {
             if (r.getRequestMethod().equals("PUT")) {
                 handlePut(r);
             } else {
-                r.sendResponseHeaders(405, -1);
+                // Method not allowed for non-PUT requests
+                Utils.sendResponse(r, 405, "Method Not Allowed");
             }
         } catch (Exception e) {
             e.printStackTrace();
-            r.sendResponseHeaders(500, -1);
+            Utils.sendResponse(r, 500, "Internal Server Error");
         }
     }
 
@@ -34,16 +35,15 @@ public class AddActorHandler implements HttpHandler {
         String name;
         String actorId;
         int statusCode;
-        String response = "";
+        String response;
 
         try {
+            // Parse JSON and extract required fields
             jo = new JSONObject(body);
             name = jo.getString("name");
             actorId = jo.getString("actorId");
         } catch (JSONException e) {
-            statusCode = 400;
-            response = "Bad Request: Malformed JSON or missing required fields";
-            sendResponse(r, statusCode, response);
+            Utils.sendResponse(r, 400, "Bad Request: Malformed JSON or missing required fields");
             return;
         }
 
@@ -54,32 +54,17 @@ public class AddActorHandler implements HttpHandler {
                         Values.parameters("id", actorId));
 
                 if (result.hasNext()) {
-                    statusCode = 400;
-                    response = "Bad Request: Actor already exists";
+                    Utils.sendResponse(r, 400, "Bad Request: Actor already exists");
                 } else {
                     // Add the actor
                     tx.run("CREATE (:actor {id: $id, name: $name})",
                             Values.parameters("id", actorId, "name", name));
                     tx.success();
-                    statusCode = 200;
-                    response = "OK: Actor added successfully";
+                    Utils.sendResponse(r, 200, "OK: Actor added successfully");
                 }
-            } catch (Exception e) {
-                statusCode = 500;
-                response = "Internal Server Error: " + e.getMessage();
             }
         } catch (Exception e) {
-            statusCode = 500;
-            response = "Internal Server Error: Database connection failed";
+            Utils.sendResponse(r, 500, "Internal Server Error: " + e.getMessage());
         }
-
-        sendResponse(r, statusCode, response);
-    }
-
-    private void sendResponse(HttpExchange r, int statusCode, String response) throws IOException {
-        r.sendResponseHeaders(statusCode, response.length());
-//        OutputStream os = r.getResponseBody();
-//        os.write(response.getBytes());
-//        os.close();
     }
 }

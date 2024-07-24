@@ -1,11 +1,9 @@
 package ca.yorku.eecs;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.util.stream.Collectors;
 
+import com.sun.net.httpserver.HttpExchange;
 import org.neo4j.driver.v1.*;
 
 public class Utils {
@@ -31,5 +29,12 @@ public class Utils {
         try (BufferedReader br = new BufferedReader(new InputStreamReader(inputStream))) {
             return br.lines().collect(Collectors.joining(System.lineSeparator()));
         }
+    }
+
+    public static void sendResponse(HttpExchange r, int statusCode, String response) throws IOException {
+        r.sendResponseHeaders(statusCode, response.length());
+        OutputStream os = r.getResponseBody();
+        os.write(response.getBytes());
+        os.close();
     }
 }

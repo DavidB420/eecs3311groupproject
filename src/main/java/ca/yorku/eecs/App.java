@@ -21,6 +21,10 @@ public class App
         server.createContext("/api/v1/computeBaconNumber", new ComputeBaconNumberHandler());
         server.createContext("/api/v1/computeBaconPath", new ComputeBaconPathHandler());
 
+        // New feature endpoints
+        server.createContext("/api/v1/addMovieRating", new AddMovieRatingHandler());
+        server.createContext("/api/v1/getMoviesByRating", new GetMoviesByRatingHandler());
+
         server.start();
         System.out.printf("Server started on port %d...\n", PORT);
     }

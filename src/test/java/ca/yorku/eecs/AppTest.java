@@ -3,6 +3,18 @@ package ca.yorku.eecs;
 import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+import org.neo4j.driver.v1.AuthTokens;
+import org.neo4j.driver.v1.Driver;
+import org.neo4j.driver.v1.GraphDatabase;
+import org.neo4j.driver.v1.Session;
 
 /**
  * Unit test for simple App.
@@ -10,6 +22,8 @@ import junit.framework.TestSuite;
 public class AppTest 
     extends TestCase
 {
+    private static final String BASE_URL = "http://localhost:8080";
+
     /**
      * Create the test case
      *
@@ -35,4 +49,56 @@ public class AppTest
     {
         assertTrue( true );
     }
+
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        // Clear the database or set it to a known state before each test
+        try (Session session = Utils.driver.session()) {
+            System.out.println("Clearing the database...");
+            session.run("MATCH (n) DETACH DELETE n");
+            System.out.println("Database cleared.");
+        } catch (Exception e) {
+            System.err.println("Error during setup: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public void testAddActorPass() throws Exception {
+        JSONObject json = new JSONObject();
+        json.put("name", "John Doe");
+        json.put("actorId", "nm1234567");
+
+        HttpURLConnection connection = sendRequest("/api/v1/addActor", "PUT", json);
+
+        assertEquals(200, connection.getResponseCode());
+        connection.disconnect();
+    }
+
+    public void testAddActorFail() throws Exception {
+        JSONObject json = new JSONObject();
+        // Missing required field 'name'
+        json.put("actorId", "nm1234567");
+
+        HttpURLConnection connection = sendRequest("/api/v1/addActor", "PUT", json);
+
+        assertEquals(400, connection.getResponseCode());
+        connection.disconnect();
+    }
+
+    private HttpURLConnection sendRequest(String path, String method, JSONObject body) throws Exception {
+        URL url = new URL(BASE_URL + path);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod(method);
+        connection.setRequestProperty("Content-Type", "application/json");
+        connection.setDoOutput(true);
+
+        try (OutputStream os = connection.getOutputStream()) {
+            byte[] input = body.toString().getBytes("utf-8");
+            os.write(input, 0, input.length);
+        }
+
+        return connection;
+    }
 }
+

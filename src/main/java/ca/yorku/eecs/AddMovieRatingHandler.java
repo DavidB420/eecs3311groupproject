@@ -54,7 +54,8 @@ public class AddMovieRatingHandler implements HttpHandler {
                     return;
                 }
 
-                tx.run("MATCH (m:movie {id: $id}) SET m.rating = $rating",
+                // Store up to 1 decimal place
+                tx.run("MATCH (m:movie {id: $id}) SET m.rating = ROUND($rating * 10) / 10.0",
                         Values.parameters("id", movieId, "rating", rating));
                 tx.success();
                 Utils.sendResponse(r, 200, "OK: Movie rating added/updated successfully");

@@ -64,6 +64,33 @@ public class AppTest
         }
     }
 
+    public void testAddMovieRatingPass() throws Exception {
+        JSONObject json1 = new JSONObject();
+        json1.put("name", "Great Movie");
+        json1.put("movieId", "tt1234567");
+        sendRequest("/api/v1/addMovie", "PUT", json1);
+
+        JSONObject json2 = new JSONObject();
+        json2.put("movieId", "tt1234567");
+        json2.put("rating", 5);
+        HttpURLConnection connection = sendRequest("/api/v1/addMovieRating", "PUT", json2);
+
+        assertEquals(200, connection.getResponseCode());
+        connection.disconnect();
+    }
+
+    public void testAddMovieRatingFail() throws Exception {
+        JSONObject json = new JSONObject();
+        // Add rating but movie does not exist
+        json.put("movieId", "non-existing");
+        json.put("rating", 5);
+
+        HttpURLConnection connection = sendRequest("/api/v1/addMovieRating", "PUT", json);
+
+        assertEquals(404, connection.getResponseCode());
+        connection.disconnect();
+    }
+
     public void testAddActorPass() throws Exception {
         JSONObject json = new JSONObject();
         json.put("name", "John Doe");
@@ -100,5 +127,8 @@ public class AppTest
 
         return connection;
     }
+
+
+
 }
 

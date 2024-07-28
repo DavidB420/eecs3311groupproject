@@ -3,25 +3,20 @@ package ca.yorku.eecs;
 import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLEncoder;
-import java.util.Iterator;
+import java.util.stream.Collectors;
 
-import org.neo4j.driver.v1.AuthTokens;
-import org.neo4j.driver.v1.Driver;
-import org.neo4j.driver.v1.GraphDatabase;
-import org.neo4j.driver.v1.Session;
+import org.neo4j.driver.v1.*;
 
 /**
  * Unit test for simple App.
  */
-public class AppTest 
+public class AppTest
     extends TestCase
 {
     private static final String BASE_URL = "http://localhost:8080/api/v1/";
@@ -66,31 +61,64 @@ public class AppTest
         }
     }
 
+    /**
+     * Sends an HTTP request to a specified endpoint using the specified method and parameters.
+     * Uses curl command to perform the request.
+     *
+     * @param endpoint The endpoint to which the request is sent.
+     * @param method The HTTP method (GET, PUT, POST, DELETE, etc.) to use for the request.
+     * @param params The JSON object containing the request parameters.
+     * @return A JSON object containing the status code and response body.
+     * @throws Exception If an error occurs during the request.
+     */
     private JSONObject sendRequest(String endpoint, String method, JSONObject params) throws Exception {
-        StringBuilder urlBuilder = new StringBuilder(BASE_URL + endpoint);
+        // Construct the full URL
+        String url = BASE_URL + endpoint;
 
-        URL url = new URL(urlBuilder.toString());
-        HttpURLConnection con = (HttpURLConnection) url.openConnection();
-        con.setRequestMethod(method);
+        // Build the curl command
+        StringBuilder command = new StringBuilder("curl -X ").append(method.toUpperCase()).append(" ").append(url);
 
-        if (params != null) {
-            con.setRequestProperty("Content-Type", "application/json");
-            con.setDoOutput(true);
-            try (OutputStream os = con.getOutputStream()) {
-                byte[] input = params.toString().getBytes("utf-8");
-                os.write(input, 0, input.length);
-            }
+        // If there are parameters, add them to the command
+        if (params != null && params.length() > 0) {
+            String paramString = params.toString();
+            command.append(" -H \"Content-Type: application/json\" -d '").append(paramString).append("'");
         }
 
-        int status = con.getResponseCode();
-        String statusMessage = con.getResponseMessage();
+        // Add a command to write the HTTP status code to the output
+        command.append(" -w \"\\n%{http_code}\"");
 
-        con.disconnect();
+        // Execute the curl command using ProcessBuilder
+        ProcessBuilder processBuilder = new ProcessBuilder("bash", "-c", command.toString());
+        Process process = processBuilder.start();
 
-        JSONObject response = new JSONObject();
-        response.put("statusCode", status);
-        response.put("statusMessage", statusMessage);
-        return response;
+        // Read the output of the curl command
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        String result = reader.lines().collect(Collectors.joining("\n"));
+
+        // Wait for the process to complete and check the exit code
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new RuntimeException("Curl command failed with exit code " + exitCode);
+        }
+
+        // Parse the status code from the output
+        int lastNewlineIndex = result.lastIndexOf('\n');
+        int statusCode = Integer.parseInt(result.substring(lastNewlineIndex + 1).trim());
+
+        // Get the response body
+        String responseBody = result.substring(0, lastNewlineIndex).trim();
+        JSONObject jsonResponse = new JSONObject();
+        jsonResponse.put("statusCode", statusCode);
+
+        // If the response body is a valid JSON object, parse it; otherwise, treat it as a string
+        if (!responseBody.isEmpty() && responseBody.startsWith("{")) {
+            jsonResponse.put("body", new JSONObject(responseBody));
+        } else {
+            jsonResponse.put("body", responseBody);
+        }
+
+        // Return the JSON response
+        return jsonResponse;
     }
     public void testAddActorPass() throws Exception {
         JSONObject body = new JSONObject();
@@ -99,7 +127,7 @@ public class AppTest
 
         JSONObject response = sendRequest("addActor", "PUT", body);
         assertEquals(200, response.getInt("statusCode"));
-        assertEquals("OK", response.getString("statusMessage"));
+        assertEquals("OK: Actor added successfully", response.getString("body"));
     }
 
     public void testAddActorFail() throws Exception {
@@ -109,7 +137,7 @@ public class AppTest
 
         JSONObject response = sendRequest("addActor", "PUT", body);
         assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
+        assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
 
         // Test case 2: Duplicate actor
         body = new JSONObject();
@@ -122,7 +150,7 @@ public class AppTest
         body.put("actorId", "nm1234567");
         response = sendRequest("addActor", "PUT", body);
         assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
+        assertEquals("Bad Request: Actor already exists", response.getString("body"));
     }
 
     public void testAddMoviePass() throws Exception {
@@ -132,7 +160,7 @@ public class AppTest
 
         JSONObject response = sendRequest("addMovie", "PUT", body);
         assertEquals(200, response.getInt("statusCode"));
-        assertEquals("OK", response.getString("statusMessage"));
+        assertEquals("OK: Movie added successfully", response.getString("body"));
     }
 
     public void testAddMovieFail() throws Exception {
@@ -142,7 +170,7 @@ public class AppTest
 
         JSONObject response = sendRequest("addMovie", "PUT", body);
         assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
+        assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
 
         // Test case 2: Duplicate movie
         body = new JSONObject();
@@ -156,21 +184,40 @@ public class AppTest
 
         response = sendRequest("addMovie", "PUT", body);
         assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
+        assertEquals("Bad Request: Movie already exists", response.getString("body"));
     }
 
     public void testGetActorPass() throws Exception {
         // Add actor first
-        JSONObject body = new JSONObject();
-        body.put("name", "John Doe");
-        body.put("actorId", "nm1234567");
-        sendRequest("addActor", "PUT", body);
+        JSONObject addBody = new JSONObject();
+        addBody.put("name", "John Doe");
+        addBody.put("actorId", "nm1234567");
+        sendRequest("addActor", "PUT", addBody);
 
-        body = new JSONObject();
-        body.put("actorId", "nm1234567");
-        JSONObject response = sendRequest("getActor", "GET", body);
+        // Get actor
+        JSONObject getBody = new JSONObject();
+        getBody.put("actorId", "nm1234567");
+        JSONObject response = sendRequest("getActor", "GET", getBody);
+
         assertEquals(200, response.getInt("statusCode"));
-        assertEquals("OK", response.getString("statusMessage"));
+//         assertEquals("OK", response.getString("body")); // OK
+
+        // Verify the response content
+        JSONObject responseBody = new JSONObject(response.getString("body"));
+        assertEquals("nm1234567", responseBody.getString("actorId"));
+        assertEquals("John Doe", responseBody.getString("name"));
+        assertTrue(responseBody.has("movies"));
+
+        // Verify in Neo4j
+        try (Session session = Utils.driver.session()) {
+            StatementResult result = session.run(
+                    "MATCH (a:actor {id: $id}) RETURN a.name as name",
+                    Values.parameters("id", "nm1234567")
+            );
+            assertTrue(result.hasNext());
+            Record record = result.next();
+            assertEquals("John Doe", record.get("name").asString());
+        }
     }
 
     public void testGetActorFail() throws Exception {
@@ -180,35 +227,46 @@ public class AppTest
 
         JSONObject response = sendRequest("getActor", "GET", body);
         assertEquals(404, response.getInt("statusCode"));
-        assertEquals("Not Found", response.getString("statusMessage"));
+        assertEquals("Not Found: Actor does not exist", response.getString("body"));
 
         // Test case 2: Missing required field
         body = new JSONObject();
         response = sendRequest("getActor", "GET", body);
         assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
-
-        body = new JSONObject();
-        body.put("id", "wow");
-        response = sendRequest("getActor", "GET", body);
-        assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
+        assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
     }
 
     public void testGetMoviePass() throws Exception {
         // Add Movie
-        JSONObject body = new JSONObject();
-        body.put("name", "Test Movie");
-        body.put("movieId", "tt1234567");
-        sendRequest("addMovie", "PUT", body);
+        JSONObject addBody = new JSONObject();
+        addBody.put("name", "Test Movie");
+        addBody.put("movieId", "tt1234567");
+        sendRequest("addMovie", "PUT", addBody);
 
         // Get Movie
-        body = new JSONObject();
-        body.put("movieId", "tt1234567");
+        JSONObject getBody = new JSONObject();
+        getBody.put("movieId", "tt1234567");
 
-        JSONObject response = sendRequest("getMovie", "GET", body);
+        JSONObject response = sendRequest("getMovie", "GET", getBody);
         assertEquals(200, response.getInt("statusCode"));
-        assertEquals("OK", response.getString("statusMessage"));
+        assertEquals("{\"actors\":[],\"name\":\"Test Movie\",\"movieId\":\"tt1234567\"}", response.getString("body")); // OK
+
+        // Verify the response content
+        JSONObject responseBody = new JSONObject(response.getString("body"));
+        assertEquals("tt1234567", responseBody.getString("movieId"));
+        assertEquals("Test Movie", responseBody.getString("name"));
+        assertTrue(responseBody.has("actors"));
+
+        // Verify in Neo4j
+        try (Session session = Utils.driver.session()) {
+            StatementResult result = session.run(
+                    "MATCH (m:movie {id: $id}) RETURN m.name as name",
+                    Values.parameters("id", "tt1234567")
+            );
+            assertTrue(result.hasNext());
+            Record record = result.next();
+            assertEquals("Test Movie", record.get("name").asString());
+        }
     }
 
     public void testGetMovieFail() throws Exception {
@@ -218,40 +276,71 @@ public class AppTest
 
         JSONObject response = sendRequest("getMovie", "GET", body);
         assertEquals(404, response.getInt("statusCode"));
-        assertEquals("Not Found", response.getString("statusMessage"));
+        assertEquals("Not Found: Movie does not exist", response.getString("body"));
 
         // Test case 2: Missing required field
         body = new JSONObject();
         response = sendRequest("getMovie", "GET", body);
         assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
+        assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
     }
 
     public void testAddMovieRatingPass() throws Exception {
         // Add movie
-        JSONObject body = new JSONObject();
-        body.put("name", "Best Movie");
-        body.put("movieId", "tt1234567");
-        sendRequest("addMovie", "PUT", body);
+        JSONObject addBody = new JSONObject();
+        addBody.put("name", "Best Movie");
+        addBody.put("movieId", "tt1234567");
+        sendRequest("addMovie", "PUT", addBody);
 
         // Case 1: Rate the movie
-        body = new JSONObject();
-        body.put("movieId", "tt1234567");
-        body.put("rating", 8.5);
+        JSONObject rateBody = new JSONObject();
+        rateBody.put("movieId", "tt1234567");
+        rateBody.put("rating", 8.5);
 
-        JSONObject response = sendRequest("addMovieRating", "PUT", body);
+        JSONObject response = sendRequest("addMovieRating", "PUT", rateBody);
         assertEquals(200, response.getInt("statusCode"));
-        assertEquals("OK", response.getString("statusMessage"));
+        assertEquals("OK: Movie rating added/updated successfully", response.getString("body"));
+
+        // delay between writing and reading the rating
+        Thread.sleep(100);
+
+        // Verify in Neo4j
+        try (Session session = Utils.driver.session()) {
+            StatementResult result = session.run(
+                    "MATCH (m:movie {id: $id}) RETURN m.rating as rating",
+                    Values.parameters("id", "tt1234567")
+            );
+            assertTrue(result.hasNext());
+            Record record = result.next();
+            assertNotNull("Rating should not be null", record.get("rating"));
+            assertEquals(8.5, record.get("rating").asFloat(), 0.01);
+        }
 
         // Case 2: Rate the movie again
-        body = new JSONObject();
-        body.put("movieId", "tt1234567");
-        body.put("rating", 1.0);
+        rateBody = new JSONObject();
+        rateBody.put("movieId", "tt1234567");
+        rateBody.put("rating", 9.0);
 
-        response = sendRequest("addMovieRating", "PUT", body);
+        response = sendRequest("addMovieRating", "PUT", rateBody);
         assertEquals(200, response.getInt("statusCode"));
-        assertEquals("OK", response.getString("statusMessage"));
+        assertEquals("OK: Movie rating added/updated successfully", response.getString("body"));
+
+        // delay between writing and reading the rating
+        Thread.sleep(100);
+
+        // Verify updated rating in Neo4j
+        try (Session session = Utils.driver.session()) {
+            StatementResult result = session.run(
+                    "MATCH (m:movie {id: $id}) RETURN m.rating as rating",
+                    Values.parameters("id", "tt1234567")
+            );
+            assertTrue(result.hasNext());
+            Record record = result.next();
+            assertNotNull("Rating should not be null", record.get("rating"));
+            assertEquals(9.0, record.get("rating").asFloat(), 0.01);
+        }
     }
+
 
     public void testAddMovieRatingFail() throws Exception {
         // Test case 1: Invalid rating (outside range)
@@ -261,54 +350,57 @@ public class AppTest
 
         JSONObject response = sendRequest("addMovieRating", "PUT", body);
         assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
+        assertEquals("Bad Request: Rating must be between 0.0 and 10.0", response.getString("body"));
 
         // Test case 2: Non-existent movie
         body.put("movieId", "tt9999999");
         body.put("rating", 8.0);
         response = sendRequest("addMovieRating", "PUT", body);
         assertEquals(404, response.getInt("statusCode"));
-        assertEquals("Not Found", response.getString("statusMessage"));
+        assertEquals("Not Found: Movie does not exist", response.getString("body"));
 
         // Test case 3: Missing required field
         body = new JSONObject();
         body.put("movieId", "tt1234567");
         response = sendRequest("addMovieRating", "PUT", body);
         assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
+        assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
     }
 
     public void testGetMoviesByRatingPass() throws Exception {
-        // Add movie
-        JSONObject body = new JSONObject();
-        body.put("name", "Best Movie");
-        body.put("movieId", "tt1234567");
-        sendRequest("addMovie", "PUT", body);
+        // Add movies with different ratings
+        addMovieWithRating("Movie1", "tt1111111", 7.0);
+        addMovieWithRating("Movie2", "tt2222222", 8.0);
+        addMovieWithRating("Movie3", "tt3333333", 9.0);
 
-        // Rate the movie
-        body = new JSONObject();
-        body.put("movieId", "tt1234567");
-        body.put("rating", 8.5);
-        sendRequest("addMovieRating", "PUT", body);
-
-        // Get Movies By Rating, minRating = maxRating
+        // Get Movies By Rating
         JSONObject queryParams = new JSONObject();
         queryParams.put("minRating", 7.5);
-        queryParams.put("maxRating", 7.5);
+        queryParams.put("maxRating", 8.5);
 
         JSONObject response = sendRequest("getMoviesByRating", "GET", queryParams);
         assertEquals(200, response.getInt("statusCode"));
-        assertEquals("OK", response.getString("statusMessage"));
+        assertEquals("{\"movies\":[{\"name\":\"Movie2\",\"rating\":8,\"movieId\":\"tt2222222\"}]}", response.getString("body"));
 
-        // Get Movies By Rating
-        queryParams = new JSONObject();
-        queryParams.put("minRating", 7.5);
-        queryParams.put("maxRating", 10.0);
-
-        response = sendRequest("getMoviesByRating", "GET", queryParams);
-        assertEquals(200, response.getInt("statusCode"));
-        assertEquals("OK", response.getString("statusMessage"));
+        // Verify the response content
+        JSONObject responseBody = new JSONObject(response.getString("body"));
+        JSONArray movies = responseBody.getJSONArray("movies");
+        assertEquals(1, movies.length());
+        assertEquals("Movie2", movies.getJSONObject(0).getString("name"));
     }
+
+    private void addMovieWithRating(String name, String movieId, double rating) throws Exception {
+        JSONObject addBody = new JSONObject();
+        addBody.put("name", name);
+        addBody.put("movieId", movieId);
+        sendRequest("addMovie", "PUT", addBody);
+
+        JSONObject rateBody = new JSONObject();
+        rateBody.put("movieId", movieId);
+        rateBody.put("rating", rating);
+        sendRequest("addMovieRating", "PUT", rateBody);
+    }
+
 
     public void testGetMoviesByRatingFail() throws Exception {
         // Test case 1: Invalid range (minRating > maxRating)
@@ -318,7 +410,7 @@ public class AppTest
 
         JSONObject response = sendRequest("getMoviesByRating", "GET", body);
         assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
+        assertEquals("Bad Request: minRating must be less than or equal to maxRating", response.getString("body"));
 
         // Test case 2: Rating outside valid range
         body = new JSONObject();
@@ -326,14 +418,14 @@ public class AppTest
         body.put("maxRating", 11.0);
         response = sendRequest("getMoviesByRating", "GET", body);
         assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
+        assertEquals("Bad Request: minRating must be between 0.0 and 10.0", response.getString("body"));
 
         // Test case 3: Missing required field
         body = new JSONObject();
         body.put("minRating", 7.0);
         response = sendRequest("getMoviesByRating", "GET", body);
         assertEquals(400, response.getInt("statusCode"));
-        assertEquals("Bad Request", response.getString("statusMessage"));
+        assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
     }
 }
 

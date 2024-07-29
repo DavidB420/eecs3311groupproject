@@ -15,6 +15,6 @@ public class ComputeBaconPathHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-
+        
     }
 }

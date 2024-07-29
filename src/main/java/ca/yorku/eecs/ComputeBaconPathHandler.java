@@ -8,6 +8,7 @@ import org.json.JSONObject;
 import org.neo4j.driver.v1.*;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 public class ComputeBaconPathHandler implements HttpHandler {
@@ -57,7 +58,7 @@ public class ComputeBaconPathHandler implements HttpHandler {
 
     protected static List<String> computeBaconPath(Session session, String actorId) {
         if (actorId.equals(KEVIN_BACON_ID)) {
-            return List.of(KEVIN_BACON_ID);
+            return Collections.singletonList(KEVIN_BACON_ID);
         }
 
         String query = 

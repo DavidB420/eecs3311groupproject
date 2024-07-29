@@ -45,25 +45,17 @@ public class ComputeBaconNumberHandler implements HttpHandler {
         }
 
         try (Session session = Utils.driver.session()) {
-            try (Transaction tx = session.beginTransaction()) {
-                StatementResult resultActor = tx.run("MATCH (a:actor {id: $id}) RETURN a",
-                Values.parameters("id", actorId));
-
-                if (resultActor.hasNext()){
-                
-                    List<String> queue = new ArrayList<String>();
-                    int currentDistance = 0;
-
-                    //Add starting actor id to bfs queue
-                    queue.add(actorId);
-
-                    while (!queue.isEmpty()) {
-                        StatementResult result = tx.run("MATCH (a:actor {id: $id})-[:ACTED_IN*1]->(fof) RETURN DISTINCT fof",  Values.parameters("id", actorId));
-                        System.out.println(result.single().get("length"));    
-                    }
-                }
-
+            List<String> baconPath = ComputeBaconPathHandler.computeBaconPath(session, actorId);
+            
+            if (baconPath != null) {
+                JSONObject response = new JSONObject();
+                response.put("baconNumber", baconPath.size());
+                Utils.sendResponse(r, 200, response.toString());
+            } else {
+                Utils.sendResponse(r, 404, "Not Found: Actor does not exist or has no path to Kevin Bacon");
             }
+        } catch (Exception e) {
+            Utils.sendResponse(r, 500, "Internal Server Error: " + e.getMessage());
         }
     }
 }

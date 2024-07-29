@@ -55,7 +55,7 @@ public class ComputeBaconPathHandler implements HttpHandler {
         }
     }
 
-    private List<String> computeBaconPath(Session session, String actorId) {
+    protected static List<String> computeBaconPath(Session session, String actorId) {
         if (actorId.equals(KEVIN_BACON_ID)) {
             return List.of(KEVIN_BACON_ID);
         }

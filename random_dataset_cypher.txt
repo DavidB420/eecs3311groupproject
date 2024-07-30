@@ -1,0 +1,91 @@
+// Create actors (50 actors)
+UNWIND range(1, 50) AS i
+CREATE (a:actor {id: 'nm' + toString(1000000 + i), name: 'Actor ' + toString(i)});
+
+// Create movies (100 movies)
+UNWIND range(1, 100) AS i
+CREATE (m:movie {id: 'tt' + toString(1000000 + i), name: 'Movie ' + toString(i)});
+
+// Create relationships with varying complexity
+// 1. Actors in many movies (create 10 prolific actors)
+MATCH (a:actor)
+WHERE toInteger(right(a.id, 2)) <= 10
+WITH a
+MATCH (m:movie)
+WHERE rand() < 0.3
+CREATE (a)-[:ACTED_IN]->(m);
+
+// 2. Movies with large casts (create 20 movies with many actors)
+MATCH (m:movie)
+WHERE toInteger(right(m.id, 2)) <= 20
+WITH m
+MATCH (a:actor)
+WHERE rand() < 0.4
+CREATE (a)-[:ACTED_IN]->(m);
+
+// 3. Create some medium connections (30 actors in 2-5 movies each)
+MATCH (a:actor)
+WHERE toInteger(right(a.id, 2)) > 10 AND toInteger(right(a.id, 2)) <= 40
+WITH a
+MATCH (m:movie)
+WHERE rand() < 0.05
+CREATE (a)-[:ACTED_IN]->(m);
+
+// 4. Create some sparse connections (10 actors in 1-2 movies each)
+MATCH (a:actor)
+WHERE toInteger(right(a.id, 2)) > 40
+WITH a
+MATCH (m:movie)
+WHERE rand() < 0.02
+CREATE (a)-[:ACTED_IN]->(m);
+
+// 5. Ensure Kevin Bacon exists and has many connections
+MERGE (kb:actor {id: 'nm0000102', name: 'Kevin Bacon'})
+WITH kb
+MATCH (m:movie)
+WHERE rand() < 0.2
+CREATE (kb)-[:ACTED_IN]->(m);
+
+// 6. Create some movies with no actors
+MATCH (m:movie)
+WHERE NOT ()-[:ACTED_IN]->(m)
+WITH m
+WHERE rand() < 0.1
+SET m.no_actors = true;
+
+// 7. Create some actors with no movies
+MATCH (a:actor)
+WHERE NOT (a)-[:ACTED_IN]->()
+WITH a
+WHERE rand() < 0.1
+SET a.no_movies = true;
+
+// 8. Create some pairs of actors who frequently work together
+MATCH (a1:actor), (a2:actor)
+WHERE a1 <> a2 AND toInteger(right(a1.id, 2)) % 10 = toInteger(right(a2.id, 2)) % 10
+WITH a1, a2
+MATCH (m:movie)
+WHERE rand() < 0.01
+CREATE (a1)-[:ACTED_IN]->(m),
+       (a2)-[:ACTED_IN]->(m);
+
+// 9. Create some movie franchises (series of movies with overlapping casts)
+WITH range(1, 5) AS franchise
+UNWIND franchise AS f
+MATCH (a:actor)
+WHERE rand() < 0.1
+WITH f, collect(a) AS franchise_actors
+UNWIND range(1, 3) AS sequel
+CREATE (m:movie {id: 'tt' + toString(2000000 + f*10 + sequel), name: 'Franchise ' + toString(f) + ' Movie ' + toString(sequel)})
+WITH m, franchise_actors
+UNWIND franchise_actors AS actor
+WITH m, actor WHERE rand() < 0.7
+CREATE (actor)-[:ACTED_IN]->(m);
+
+// 10. Add some random additional connections
+MATCH (a:actor)
+WHERE rand() < 0.1
+WITH a
+MATCH (m:movie)
+WHERE rand() < 0.01
+CREATE (a)-[:ACTED_IN]->(m);

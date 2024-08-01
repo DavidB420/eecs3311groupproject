@@ -45,11 +45,17 @@ public class ComputeBaconNumberHandler implements HttpHandler {
         }
 
         try (Session session = Utils.driver.session()) {
+            int count = 0;
             List<String> baconPath = ComputeBaconPathHandler.computeBaconPath(session, actorId);
             
             if (baconPath != null) {
                 JSONObject response = new JSONObject();
-                response.put("baconNumber", baconPath.size());
+
+                for (int i = 0; i < baconPath.size(); i++){
+                    if (i % 2 == 1) count++;
+                }
+
+                response.put("baconNumber", count);
                 Utils.sendResponse(r, 200, response.toString());
             } else {
                 Utils.sendResponse(r, 404, "Not Found: Actor does not exist or has no path to Kevin Bacon");

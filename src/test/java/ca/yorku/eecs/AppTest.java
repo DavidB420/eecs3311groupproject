@@ -18,7 +18,7 @@ import org.neo4j.driver.v1.Record;
  * Unit test for simple App.
  */
 public class AppTest
-    extends TestCase
+        extends TestCase
 {
     private static final String BASE_URL = "http://localhost:8080/api/v1/";
 
@@ -121,6 +121,27 @@ public class AppTest
         // Return the JSON response
         return jsonResponse;
     }
+
+    // Helper methods
+    private void addActor(String name, String actorId) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("name", name);
+        body.put("actorId", actorId);
+        sendRequest("addActor", "PUT", body);
+    }
+    private void addMovie(String name, String movieId) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("name", name);
+        body.put("movieId", movieId);
+        sendRequest("addMovie", "PUT", body);
+    }
+    private void addRelationship(String actorId, String movieId) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("actorId", actorId);
+        body.put("movieId", movieId);
+        sendRequest("addRelationship", "PUT", body);
+    }
+
     public void testAddActorPass() throws Exception {
         JSONObject body = new JSONObject();
         body.put("name", "John Doe");
@@ -428,5 +449,418 @@ public class AppTest
         assertEquals(400, response.getInt("statusCode"));
         assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
     }
+
+    public void testAddRelationshipPass() throws Exception {
+        addActor("John Doe", "nm1234567");
+        addMovie("Test Movie", "tt1234567");
+
+        JSONObject body = new JSONObject();
+        body.put("actorId", "nm1234567");
+        body.put("movieId", "tt1234567");
+
+        JSONObject response = sendRequest("addRelationship", "PUT", body);
+        assertEquals(200, response.getInt("statusCode"));
+        assertEquals("OK: Relationship added successfully", response.getString("body"));
+
+        Thread.sleep(100);
+
+        // Verify relationship in Neo4j
+        try (Session session = Utils.driver.session()) {
+            StatementResult result = session.run(
+                    "MATCH (a:actor {id: $actorId})-[r:ACTED_IN]->(m:movie {id: $movieId}) RETURN COUNT(r) as count",
+                    Values.parameters("actorId", "nm1234567", "movieId", "tt1234567")
+            );
+            assertEquals(1, result.single().get("count").asInt());
+        }
+    }
+
+    public void testAddRelationshipFail() throws Exception {
+        // Test case 1: Non-existent actor
+        JSONObject body = new JSONObject();
+        body.put("actorId", "nm9999999");
+        body.put("movieId", "tt1234567");
+
+        JSONObject response = sendRequest("addRelationship", "PUT", body);
+        assertEquals(404, response.getInt("statusCode"));
+        assertEquals("Not Found: Actor and/or movie does not exist", response.getString("body"));
+
+        // Test case 2: Duplicate relationship
+        addActor("John Doe", "nm1234567");
+        addMovie("Test Movie", "tt1234567");
+        body.put("actorId", "nm1234567");
+        body.put("movieId", "tt1234567");
+        sendRequest("addRelationship", "PUT", body);
+
+        response = sendRequest("addRelationship", "PUT", body);
+        assertEquals(400, response.getInt("statusCode"));
+        assertEquals("Bad Request: Relationship already exists", response.getString("body"));
+
+        Thread.sleep(100);
+
+        try (Session session = Utils.driver.session()) {
+            StatementResult result = session.run(
+                    "MATCH (a:actor {id: $actorId})-[r:ACTED_IN]->(m:movie {id: $movieId}) RETURN COUNT(r) as count",
+                    Values.parameters("actorId", "nm1234567", "movieId", "tt1234567")
+            );
+            assertEquals(1, result.single().get("count").asInt());
+        }
+
+        // Test case 3: Missing required field
+        body = new JSONObject();
+        body.put("actorId", "nm1234567");
+        response = sendRequest("addRelationship", "PUT", body);
+        assertEquals(400, response.getInt("statusCode"));
+        assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
+
+        // Test case 4: Non-existent movie
+        body = new JSONObject();
+        body.put("actorId", "nm1234567");
+        body.put("movieId", "tt9999999");
+        response = sendRequest("addRelationship", "PUT", body);
+        assertEquals(404, response.getInt("statusCode"));
+        assertEquals("Not Found: Actor and/or movie does not exist", response.getString("body"));
+    }
+
+
+    public void testHasRelationshipPass() throws Exception {
+        addActor("John Doe", "nm1234567");
+        addMovie("Test Movie", "tt1234567");
+        JSONObject addRelBody = new JSONObject();
+        addRelBody.put("actorId", "nm1234567");
+        addRelBody.put("movieId", "tt1234567");
+        sendRequest("addRelationship", "PUT", addRelBody);
+
+        JSONObject body = new JSONObject();
+        body.put("actorId", "nm1234567");
+        body.put("movieId", "tt1234567");
+
+        JSONObject response = sendRequest("hasRelationship", "GET", body);
+        assertEquals(200, response.getInt("statusCode"));
+
+        JSONObject responseBody = new JSONObject(response.getString("body"));
+        assertEquals("nm1234567", responseBody.getString("actorId"));
+        assertEquals("tt1234567", responseBody.getString("movieId"));
+        assertTrue(responseBody.getBoolean("hasRelationship"));
+    }
+
+    public void testHasRelationshipFail() throws Exception {
+        // Test case 1: Non-existent actor
+        JSONObject body = new JSONObject();
+        body.put("actorId", "nm9999999");
+        body.put("movieId", "tt1234567");
+
+        JSONObject response = sendRequest("hasRelationship", "GET", body);
+        assertEquals(404, response.getInt("statusCode"));
+        assertEquals("Not Found: Actor or Movie does not exist", response.getString("body"));
+
+        // Test case 2: Missing required field
+        body = new JSONObject();
+        body.put("actorId", "nm1234567");
+        response = sendRequest("hasRelationship", "GET", body);
+        assertEquals(400, response.getInt("statusCode"));
+        assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
+
+        // Test case 3: Actor and movie exist but no relationship
+        addActor("John Doe", "nm1234567");
+        addMovie("Test Movie", "tt1234567");
+        body.put("actorId", "nm1234567");
+        body.put("movieId", "tt1234567");
+        response = sendRequest("hasRelationship", "GET", body);
+        assertEquals(200, response.getInt("statusCode"));
+        JSONObject responseBody = new JSONObject(response.getString("body"));
+        assertFalse(responseBody.getBoolean("hasRelationship"));
+    }
+
+    public void testComputeBaconNumberPass() throws Exception {
+        // Setup
+        addActor("Kevin Bacon", "nm0000102");
+        addMovie("Movie A", "tt0000001");
+        addActor("Actor A", "nm0000001");
+        addMovie("Movie B", "tt0000002");
+        addActor("Actor B", "nm0000002");
+
+        // Create relationships
+        JSONObject relBody = new JSONObject();
+        relBody.put("actorId", "nm0000102");
+        relBody.put("movieId", "tt0000001");
+        sendRequest("addRelationship", "PUT", relBody);
+
+        relBody.put("actorId", "nm0000001");
+        relBody.put("movieId", "tt0000001");
+        sendRequest("addRelationship", "PUT", relBody);
+
+        relBody.put("actorId", "nm0000001");
+        relBody.put("movieId", "tt0000002");
+        sendRequest("addRelationship", "PUT", relBody);
+
+        relBody.put("actorId", "nm0000002");
+        relBody.put("movieId", "tt0000002");
+        sendRequest("addRelationship", "PUT", relBody);
+
+        // Test case 1: Normal Bacon number
+        JSONObject body = new JSONObject();
+        body.put("actorId", "nm0000002");
+
+        JSONObject response = sendRequest("computeBaconNumber", "GET", body);
+        assertEquals(200, response.getInt("statusCode"));
+        JSONObject responseBody = new JSONObject(response.getString("body"));
+        assertEquals(2, responseBody.getInt("baconNumber"));
+
+        // Test case 2: Kevin Bacon himself
+        body.put("actorId", "nm0000102");
+        response = sendRequest("computeBaconNumber", "GET", body);
+        assertEquals(200, response.getInt("statusCode"));
+        responseBody = new JSONObject(response.getString("body"));
+        assertEquals(0, responseBody.getInt("baconNumber"));
+    }
+
+    public void testComputeBaconNumberFail() throws Exception {
+        // Test case 1: Non-existent actor
+        JSONObject body = new JSONObject();
+        body.put("actorId", "nm9999999");
+
+        JSONObject response = sendRequest("computeBaconNumber", "GET", body);
+        assertEquals(404, response.getInt("statusCode"));
+        assertEquals("Not Found: Actor does not exist or has no path to Kevin Bacon", response.getString("body"));
+
+        // Test case 2: Missing required field
+        body = new JSONObject();
+        response = sendRequest("computeBaconNumber", "GET", body);
+        assertEquals(400, response.getInt("statusCode"));
+        assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
+
+        // Test case 3: Actor exists but has no path to Kevin Bacon
+        addActor("Isolated Actor", "nm0000099");
+        body.put("actorId", "nm0000099");
+        response = sendRequest("computeBaconNumber", "GET", body);
+        assertEquals(404, response.getInt("statusCode"));
+        assertEquals("Not Found: Actor does not exist or has no path to Kevin Bacon", response.getString("body"));
+    }
+
+    public void testComputeBaconPathPass() throws Exception {
+        // Setup
+        addActor("Kevin Bacon", "nm0000102");
+        addMovie("Movie A", "tt0000001");
+        addActor("Actor A", "nm0000001");
+        addMovie("Movie B", "tt0000002");
+        addActor("Actor B", "nm0000002");
+
+        // Create relationships
+        JSONObject relBody = new JSONObject();
+        relBody.put("actorId", "nm0000102");
+        relBody.put("movieId", "tt0000001");
+        sendRequest("addRelationship", "PUT", relBody);
+
+        relBody.put("actorId", "nm0000001");
+        relBody.put("movieId", "tt0000001");
+        sendRequest("addRelationship", "PUT", relBody);
+
+        relBody.put("actorId", "nm0000001");
+        relBody.put("movieId", "tt0000002");
+        sendRequest("addRelationship", "PUT", relBody);
+
+        relBody.put("actorId", "nm0000002");
+        relBody.put("movieId", "tt0000002");
+        sendRequest("addRelationship", "PUT", relBody);
+
+        JSONObject body = new JSONObject();
+        body.put("actorId", "nm0000002");
+
+        // Test case 1: Normal Bacon number
+        JSONObject response = sendRequest("computeBaconPath", "GET", body);
+        assertEquals(200, response.getInt("statusCode"));
+
+        JSONObject responseBody = new JSONObject(response.getString("body"));
+        assertTrue(responseBody.has("baconPath"));
+
+        JSONArray baconPath = responseBody.getJSONArray("baconPath");
+        assertEquals(5, baconPath.length());
+        assertEquals("nm0000002", baconPath.getString(0));
+        assertEquals("tt0000002", baconPath.getString(1));
+        assertEquals("nm0000001", baconPath.getString(2));
+        assertEquals("tt0000001", baconPath.getString(3));
+        assertEquals("nm0000102", baconPath.getString(4));
+
+        // Test case 2: Kevin Bacon himself
+        body.put("actorId", "nm0000102");
+        response = sendRequest("computeBaconPath", "GET", body);
+        assertEquals(200, response.getInt("statusCode"));
+        responseBody = new JSONObject(response.getString("body"));
+        assertTrue(responseBody.has("baconPath"));
+        assertEquals(1, responseBody.getJSONArray("baconPath").length());
+        assertEquals("nm0000102", responseBody.getJSONArray("baconPath").getString(0));
+    }
+
+    public void testComputeBaconPathFail() throws Exception {
+        // Test case 1: Non-existent actor
+        JSONObject body = new JSONObject();
+        body.put("actorId", "nm9999999");
+
+        JSONObject response = sendRequest("computeBaconPath", "GET", body);
+        assertEquals(404, response.getInt("statusCode"));
+        assertEquals("Not Found: Actor does not exist or has no path to Kevin Bacon", response.getString("body"));
+
+        // Test case 2: Missing required field
+        body = new JSONObject();
+        response = sendRequest("computeBaconPath", "GET", body);
+        assertEquals(400, response.getInt("statusCode"));
+        assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
+
+        // Test case 3: Actor exists but has no path to Kevin Bacon
+        addActor("Isolated Actor", "nm0000099");
+        body.put("actorId", "nm0000099");
+        response = sendRequest("computeBaconPath", "GET", body);
+        assertEquals(404, response.getInt("statusCode"));
+        assertEquals("Not Found: Actor does not exist or has no path to Kevin Bacon", response.getString("body"));
+    }
+
+    public void testGetActorNetworkPass() throws Exception {
+        // Setup: Add actors and their relationships
+        addActor("Kevin Bacon", "nm0000102");
+        addActor("Actor A", "nm0000001");
+        addActor("Actor B", "nm0000002");
+        addMovie("Movie X", "tt0000001");
+        addRelationship("nm0000102", "tt0000001");
+        addRelationship("nm0000001", "tt0000001");
+        addRelationship("nm0000002", "tt0000001");
+
+        // Test case 1: Actor with collaborations
+        JSONObject body = new JSONObject();
+        body.put("actorId", "nm0000102");
+        JSONObject response = sendRequest("getActorNetwork", "GET", body);
+        assertEquals(200, response.getInt("statusCode"));
+
+        JSONObject responseBody = new JSONObject(response.getString("body"));
+        assertTrue(responseBody.has("actors"));
+        JSONArray actors = responseBody.getJSONArray("actors");
+        assertEquals(2, actors.length());
+        assertTrue(actors.toString().contains("nm0000001"));
+        assertTrue(actors.toString().contains("nm0000002"));
+
+        // Test case 2: Isolated actor (no collaborations)
+        addActor("Isolated Actor", "nm0000099");
+        body.put("actorId", "nm0000099");
+        response = sendRequest("getActorNetwork", "GET", body);
+        assertEquals(200, response.getInt("statusCode"));
+        responseBody = new JSONObject(response.getString("body"));
+        assertTrue(responseBody.has("actors"));
+        actors = responseBody.getJSONArray("actors");
+        assertEquals(0, actors.length());
+    }
+
+    public void testGetActorNetworkFail() throws Exception {
+        // Test case 1: Non-existent actor
+        JSONObject body = new JSONObject();
+        body.put("actorId", "nm9999999");
+
+        JSONObject response = sendRequest("getActorNetwork", "GET", body);
+        assertEquals(404, response.getInt("statusCode"));
+        assertEquals("Not Found: Actor does not exist", response.getString("body"));
+
+        // Test case 2: Missing required field
+        body = new JSONObject();
+        response = sendRequest("getActorNetwork", "GET", body);
+        assertEquals(400, response.getInt("statusCode"));
+        assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
+    }
+
+    public void testGetConnectStatsPass() throws Exception {
+        // Test case 1: Empty database
+        JSONObject response = sendRequest("getConnectStats", "GET", new JSONObject()
+                .put("limit", 5)
+                .put("most", true));
+        assertEquals(200, response.getInt("statusCode"));
+        JSONObject responseBody = new JSONObject(response.getString("body"));
+        assertTrue(responseBody.has("actors"));
+        JSONArray actors = responseBody.getJSONArray("actors");
+        assertEquals(0, actors.length());
+
+        // Setup: Add actors and their relationships
+        addActor("Kevin Bacon", "nm0000102");
+        addActor("Actor A", "nm0000001");
+        addActor("Actor B", "nm0000002");
+        addActor("Actor C", "nm0000003");
+        addMovie("Movie X", "tt0000001");
+        addMovie("Movie Y", "tt0000002");
+        addRelationship("nm0000102", "tt0000001");
+        addRelationship("nm0000001", "tt0000001");
+        addRelationship("nm0000002", "tt0000001");
+        addRelationship("nm0000102", "tt0000002");
+        addRelationship("nm0000001", "tt0000002");
+
+        // Test case 2: Get actors with most connections
+        response = sendRequest("getConnectStats", "GET", new JSONObject()
+                .put("limit", 2)
+                .put("most", true));
+        assertEquals(200, response.getInt("statusCode"));
+
+        System.out.println(response);
+
+        responseBody = new JSONObject(response.getString("body"));
+        assertTrue(responseBody.has("actors"));
+        actors = responseBody.getJSONArray("actors");
+        assertEquals(2, actors.length());
+        assertEquals("nm0000102", actors.getJSONObject(0).getString("actorId"));
+        assertEquals(3, actors.getJSONObject(0).getInt("connections"));
+        assertEquals("nm0000001", actors.getJSONObject(1).getString("actorId"));
+        assertEquals(2, actors.getJSONObject(1).getInt("connections"));
+
+        // Test case 3: Get actors with least connections
+        response = sendRequest("getConnectStats", "GET", new JSONObject()
+                .put("limit", 2)
+                .put("most", false));
+        assertEquals(200, response.getInt("statusCode"));
+
+        responseBody = new JSONObject(response.getString("body"));
+        actors = responseBody.getJSONArray("actors");
+        assertEquals(2, actors.length());
+        assertEquals("nm0000003", actors.getJSONObject(0).getString("actorId"));
+        assertEquals(0, actors.getJSONObject(0).getInt("connections"));
+        assertEquals("nm0000002", actors.getJSONObject(1).getString("actorId"));
+        assertEquals(1, actors.getJSONObject(1).getInt("connections"));
+
+        // Test case 4: Limit greater than number of actors
+        addActor("Kevin Bacon", "nm0000102");
+        addActor("Actor A", "nm0000001");
+        response = sendRequest("getConnectStats", "GET", new JSONObject()
+                .put("limit", 10)
+                .put("most", true));
+        assertEquals(200, response.getInt("statusCode"));
+        responseBody = new JSONObject(response.getString("body"));
+        actors = responseBody.getJSONArray("actors");
+        assertEquals(2, actors.length());  // Should return all actors even if less than limit
+
+        // Test case 5: Limit of 0
+        response = sendRequest("getConnectStats", "GET", new JSONObject()
+                .put("limit", 0)
+                .put("most", true));
+        assertEquals(200, response.getInt("statusCode"));
+        responseBody = new JSONObject(response.getString("body"));
+        actors = responseBody.getJSONArray("actors");
+        assertEquals(0, actors.length());
+    }
+
+    public void testGetConnectStatsFail() throws Exception {
+        // Setup: Add actors and their relationships
+        addActor("Kevin Bacon", "nm0000102");
+        addActor("Actor A", "nm0000001");
+        addActor("Actor B", "nm0000002");
+        addActor("Actor C", "nm0000003");
+        addMovie("Movie X", "tt0000001");
+        addMovie("Movie Y", "tt0000002");
+        addRelationship("nm0000102", "tt0000001");
+        addRelationship("nm0000001", "tt0000001");
+        addRelationship("nm0000002", "tt0000001");
+        addRelationship("nm0000102", "tt0000002");
+        addRelationship("nm0000001", "tt0000002");
+
+        // Test case 2: Negative limit
+        JSONObject response = sendRequest("getConnectStats", "GET", new JSONObject()
+                .put("limit", -1)
+                .put("most", true));
+        assertEquals(400, response.getInt("statusCode"));
+        assertEquals("Bad Request: Limit cannot be negative", response.getString("body"));
+    }
+
 }
 

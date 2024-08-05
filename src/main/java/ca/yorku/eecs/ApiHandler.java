@@ -45,6 +45,9 @@ public class ApiHandler implements HttpHandler {
                 case "/api/v1/getConnectStats":
                     new GetConnectStatsHandler().handle(exchange);
                     break;
+                case "/api/v1/getActorNetwork":
+                    new GetActorNetworkHandler().handle(exchange);
+                    break;
                 default:
                     notFound(exchange);
             }

@@ -776,59 +776,79 @@ public class AppTest
         assertEquals(0, actors.length());
 
         // Setup: Add actors and their relationships
-        addActor("Kevin Bacon", "nm0000102");
         addActor("Actor A", "nm0000001");
         addActor("Actor B", "nm0000002");
         addActor("Actor C", "nm0000003");
-        addMovie("Movie X", "tt0000001");
-        addMovie("Movie Y", "tt0000002");
-        addRelationship("nm0000102", "tt0000001");
-        addRelationship("nm0000001", "tt0000001");
-        addRelationship("nm0000002", "tt0000001");
-        addRelationship("nm0000102", "tt0000002");
-        addRelationship("nm0000001", "tt0000002");
+        addActor("Actor D", "nm0000004");
+        addActor("Actor E", "nm0000005");
 
-        // Test case 2: Get actors with most connections
+        addMovie("Movie 1", "tt0000001");
+        addMovie("Movie 2", "tt0000002");
+        addMovie("Movie 3", "tt0000003");
+        addMovie("Movie 4", "tt0000004");
+        addMovie("Movie 5", "tt0000005");
+
+        // Actor A: 4 connections
+        addRelationship("nm0000001", "tt0000001");
+        addRelationship("nm0000001", "tt0000002");
+        addRelationship("nm0000001", "tt0000003");
+        addRelationship("nm0000001", "tt0000004");
+
+        // Actor B: 3 connections
+        addRelationship("nm0000002", "tt0000001");
+        addRelationship("nm0000002", "tt0000002");
+        addRelationship("nm0000002", "tt0000003");
+
+        // Actor C: 2 connections
+        addRelationship("nm0000003", "tt0000001");
+        addRelationship("nm0000003", "tt0000002");
+
+        // Actor D: 1 connection
+        addRelationship("nm0000004", "tt0000001");
+
+        // Actor E: 0 connections
+
+        // Test case 2: Get actors with most connections (limit 3)
         response = sendRequest("getConnectStats", "GET", new JSONObject()
-                .put("limit", 2)
+                .put("limit", 3)
                 .put("most", true));
         assertEquals(200, response.getInt("statusCode"));
-
-        System.out.println(response);
 
         responseBody = new JSONObject(response.getString("body"));
         assertTrue(responseBody.has("actors"));
         actors = responseBody.getJSONArray("actors");
-        assertEquals(2, actors.length());
-        assertEquals("nm0000102", actors.getJSONObject(0).getString("actorId"));
-        assertEquals(3, actors.getJSONObject(0).getInt("connections"));
-        assertEquals("nm0000001", actors.getJSONObject(1).getString("actorId"));
-        assertEquals(2, actors.getJSONObject(1).getInt("connections"));
+        assertEquals(3, actors.length());
+        assertEquals("nm0000001", actors.getJSONObject(0).getString("actorId"));
+        assertEquals(4, actors.getJSONObject(0).getInt("connections"));
+        assertEquals("nm0000002", actors.getJSONObject(1).getString("actorId"));
+        assertEquals(3, actors.getJSONObject(1).getInt("connections"));
+        assertEquals("nm0000003", actors.getJSONObject(2).getString("actorId"));
+        assertEquals(2, actors.getJSONObject(2).getInt("connections"));
 
-        // Test case 3: Get actors with least connections
+        // Test case 3: Get actors with least connections (limit 3)
         response = sendRequest("getConnectStats", "GET", new JSONObject()
-                .put("limit", 2)
+                .put("limit", 3)
                 .put("most", false));
         assertEquals(200, response.getInt("statusCode"));
 
         responseBody = new JSONObject(response.getString("body"));
         actors = responseBody.getJSONArray("actors");
-        assertEquals(2, actors.length());
-        assertEquals("nm0000003", actors.getJSONObject(0).getString("actorId"));
+        assertEquals(3, actors.length());
+        assertEquals("nm0000005", actors.getJSONObject(0).getString("actorId"));
         assertEquals(0, actors.getJSONObject(0).getInt("connections"));
-        assertEquals("nm0000002", actors.getJSONObject(1).getString("actorId"));
+        assertEquals("nm0000004", actors.getJSONObject(1).getString("actorId"));
         assertEquals(1, actors.getJSONObject(1).getInt("connections"));
+        assertEquals("nm0000003", actors.getJSONObject(2).getString("actorId"));
+        assertEquals(2, actors.getJSONObject(2).getInt("connections"));
 
         // Test case 4: Limit greater than number of actors
-        addActor("Kevin Bacon", "nm0000102");
-        addActor("Actor A", "nm0000001");
         response = sendRequest("getConnectStats", "GET", new JSONObject()
                 .put("limit", 10)
                 .put("most", true));
         assertEquals(200, response.getInt("statusCode"));
         responseBody = new JSONObject(response.getString("body"));
         actors = responseBody.getJSONArray("actors");
-        assertEquals(2, actors.length());  // Should return all actors even if less than limit
+        assertEquals(5, actors.length());  // Should return all actors
 
         // Test case 5: Limit of 0
         response = sendRequest("getConnectStats", "GET", new JSONObject()

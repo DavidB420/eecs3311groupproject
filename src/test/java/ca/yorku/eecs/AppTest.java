@@ -82,14 +82,31 @@ public class AppTest
         // If there are parameters, add them to the command
         if (params != null && params.length() > 0) {
             String paramString = params.toString();
-            command.append(" -H \"Content-Type: application/json\" -d '").append(paramString).append("'");
+            if (System.getProperty("os.name").toLowerCase().contains("win")) {
+                // Windows: Escape double quotes and use double quotes around the JSON payload
+                command.append(" -H \"Content-Type: application/json\" -d \"").append(paramString.replace("\"", "\\\"")).append("\"");
+            } else {
+                // Unix-like: Use single quotes around the JSON payload
+                command.append(" -H 'Content-Type: application/json' -d '").append(paramString).append("'");
+            }
         }
 
         // Add a command to write the HTTP status code to the output
         command.append(" -w \"\\n%{http_code}\"");
 
-        // Execute the curl command using ProcessBuilder
-        ProcessBuilder processBuilder = new ProcessBuilder("bash", "-c", command.toString());
+        // Print the constructed command for debugging
+        System.out.println("Executing command: " + command.toString());
+
+        // Determine the OS and execute the command accordingly
+        ProcessBuilder processBuilder;
+        if (System.getProperty("os.name").toLowerCase().contains("win")) {
+            // Use cmd.exe on Windows
+            processBuilder = new ProcessBuilder("cmd.exe", "/c", command.toString());
+        } else {
+            // Use bash on Unix-like systems
+            processBuilder = new ProcessBuilder("bash", "-c", command.toString());
+        }
+        
         Process process = processBuilder.start();
 
         // Read the output of the curl command
@@ -117,6 +134,10 @@ public class AppTest
         } else {
             jsonResponse.put("body", responseBody);
         }
+
+        // Print the status code and response for debugging
+        System.out.println("Response Status Code: " + statusCode);
+        System.out.println("Response Body: " + responseBody);
 
         // Return the JSON response
         return jsonResponse;

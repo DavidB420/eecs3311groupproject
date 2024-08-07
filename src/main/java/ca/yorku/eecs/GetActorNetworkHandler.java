@@ -10,6 +10,7 @@ import org.json.JSONObject;
 import org.neo4j.driver.v1.Record;
 import org.neo4j.driver.v1.Session;
 import org.neo4j.driver.v1.StatementResult;
+import org.neo4j.driver.v1.Transaction;
 import org.neo4j.driver.v1.Values;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -50,42 +51,47 @@ public class GetActorNetworkHandler implements HttpHandler {
 
 
 		try (Session session = Utils.driver.session()) {
+            // Use a transaction for better error handling and consistency
+            try (Transaction tx = session.beginTransaction()) {
+                // Check if actor exists
+                StatementResult existsResult = tx.run(
+                        "MATCH (a:actor {id: $id}) RETURN a",
+                        Values.parameters("id", actorId)
+                );
+                if (!existsResult.hasNext()) {
+                    tx.close();
+                    Utils.sendResponse(r, 404, "Not Found: Actor does not exist");
+                    return;
+                }
 
-			//check if actor exists
-			StatementResult existsResult = session.run(
-					"MATCH (a:actor {id: $id}) RETURN a",
-					Values.parameters("id", actorId)
-					);
+                // Get actor's network
+                StatementResult result = tx.run(
+                        "MATCH (a:actor {id: $id}) " +
+                                "OPTIONAL MATCH (a)-[:ACTED_IN]->(m:movie)<-[:ACTED_IN]-(ca:actor) " +
+                                "WHERE a.id <> ca.id " +
+                                "RETURN DISTINCT ca.id as coActorId",
+                        Values.parameters("id", actorId)
+                );
 
-			if (!existsResult.hasNext()) {
-				Utils.sendResponse(r, 404, "Not Found: Actor does not exist");
-				return;
-			}
+                List<String> actors = new ArrayList<>();
+                while (result.hasNext()) {
+                    Record record = result.next();
+                    String coActorId = record.get("coActorId").asString(null);
+                    if (coActorId != null) {
+                        actors.add(coActorId);
+                    }
+                }
 
-			StatementResult result = session.run(
-					"MATCH (a:actor {id: $id}) " +
-							"OPTIONAL MATCH (a)-[:ACTED_IN]->(m:movie)<-[:ACTED_IN]-(ca:actor) " +
-							"WHERE a.id <> ca.id " +
-							"RETURN DISTINCT ca.id as coActorId",
-							Values.parameters("id", actorId)
-					);
+                JSONObject response = new JSONObject();
+                JSONArray actorsArray = new JSONArray(actors);
+                response.put("actors", actorsArray);
 
-			List<String> actors = new ArrayList<>();
-			while (result.hasNext()) {
-				Record record = result.next();
-				String coActorId = record.get("coActorId").asString();
-
-				actors.add(coActorId);
-			}
-
-			JSONObject response = new JSONObject();
-			JSONArray actorsArray = new JSONArray(actors);
-			response.put("actors", actorsArray);
-
-			Utils.sendResponse(r, 200, response.toString());
-
-		} catch (Exception e) {
-			Utils.sendResponse(r, 500, "Internal Server Error: " + e.getMessage());
-		}
+                tx.close();
+                Utils.sendResponse(r, 200, response.toString());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            Utils.sendResponse(r, 500, "Internal Server Error: " + e.getMessage());
+        }
 	}
 }

@@ -894,7 +894,7 @@ public class AppTest
         addRelationship("nm0000001", "tt0000001");
         addRelationship("nm0000002", "tt0000001");
 
-        // Test case 1: Actor with collaborations
+        // Test case 1: Actor with collaborations in one movie
         JSONObject body = new JSONObject();
         body.put("actorId", "nm0000102");
         JSONObject response = sendRequest("getActorNetwork", "GET", body);
@@ -907,7 +907,26 @@ public class AppTest
         assertTrue(actors.toString().contains("nm0000001"));
         assertTrue(actors.toString().contains("nm0000002"));
 
-        // Test case 2: Isolated actor (no collaborations)
+        // Test case 2: Actor with collaborations across two movies
+        addMovie("Movie Y", "tt0000002");
+        addActor("Actor C", "nm0000003");
+        addRelationship("nm0000102", "tt0000002");
+        addRelationship("nm0000003", "tt0000002");
+
+        body = new JSONObject();
+        body.put("actorId", "nm0000102");
+        response = sendRequest("getActorNetwork", "GET", body);
+        assertEquals(200, response.getInt("statusCode"));
+
+        responseBody = new JSONObject(response.getString("body"));
+        assertTrue(responseBody.has("actors"));
+        actors = responseBody.getJSONArray("actors");
+        assertEquals(3, actors.length());
+        assertTrue(actors.toString().contains("nm0000001"));
+        assertTrue(actors.toString().contains("nm0000002"));
+        assertTrue(actors.toString().contains("nm0000003"));
+
+        // Test case 3: Isolated actor (no collaborations)
         addActor("Isolated Actor", "nm0000099");
         body.put("actorId", "nm0000099");
         response = sendRequest("getActorNetwork", "GET", body);

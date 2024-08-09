@@ -34,8 +34,6 @@ public class AddActorHandler implements HttpHandler {
         JSONObject jo;
         String name;
         String actorId;
-        int statusCode;
-        String response;
 
         try {
             // Parse JSON and extract required fields

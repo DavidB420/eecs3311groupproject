@@ -55,6 +55,7 @@ public class AppTest
         try (Session session = Utils.driver.session()) {
             System.out.println("Clearing the database...");
             session.run("MATCH (n) DETACH DELETE n");
+            Thread.sleep(700); // Add a small delay
             System.out.println("Database cleared.");
         } catch (Exception e) {
             System.err.println("Error during setup: " + e.getMessage());
@@ -162,6 +163,17 @@ public class AppTest
         body.put("movieId", movieId);
         sendRequest("addRelationship", "PUT", body);
     }
+    private void addMovieWithRating(String name, String movieId, double rating) throws Exception {
+        JSONObject addBody = new JSONObject();
+        addBody.put("name", name);
+        addBody.put("movieId", movieId);
+        sendRequest("addMovie", "PUT", addBody);
+
+        JSONObject rateBody = new JSONObject();
+        rateBody.put("movieId", movieId);
+        rateBody.put("rating", rating);
+        sendRequest("addMovieRating", "PUT", rateBody);
+    }
 
     public void testAddActorPass() throws Exception {
         JSONObject body = new JSONObject();
@@ -231,11 +243,9 @@ public class AppTest
     }
 
     public void testGetActorPass() throws Exception {
+        // Case 1: Actor acted in no movies
         // Add actor first
-        JSONObject addBody = new JSONObject();
-        addBody.put("name", "John Doe");
-        addBody.put("actorId", "nm1234567");
-        sendRequest("addActor", "PUT", addBody);
+        addActor("John Doe", "nm1234567");
 
         // Get actor
         JSONObject getBody = new JSONObject();
@@ -251,6 +261,10 @@ public class AppTest
         assertEquals("John Doe", responseBody.getString("name"));
         assertTrue(responseBody.has("movies"));
 
+        // Verify the movies list is empty
+        JSONArray moviesArray = responseBody.getJSONArray("movies");
+        assertEquals(0, moviesArray.length());
+
         // Verify in Neo4j
         try (Session session = Utils.driver.session()) {
             StatementResult result = session.run(
@@ -260,6 +274,68 @@ public class AppTest
             assertTrue(result.hasNext());
             Record record = result.next();
             assertEquals("John Doe", record.get("name").asString());
+        }
+
+        // Case 2: Actor acted in movies
+        // Add actor
+        String actorId = "nm7654321";
+        String actorName = "Jane Doe";
+        addActor(actorName, actorId );
+
+        // Add movies
+        String movieId1 = "tt1234567";
+        String movieName1 = "Movie One";
+        addMovie(movieName1, movieId1);
+
+        String movieId2 = "tt2345678";
+        String movieName2 = "Movie Two";
+        addMovie(movieName2, movieId2);
+
+        // Add relationships
+        addRelationship(actorId, movieId1);
+        addRelationship(actorId, movieId2);
+
+        // Get actor
+        getBody = new JSONObject();
+        getBody.put("actorId", actorId);
+        response = sendRequest("getActor", "GET", getBody);
+
+        assertEquals(200, response.getInt("statusCode"));
+
+        // Verify the response content
+        responseBody = new JSONObject(response.getString("body"));
+        assertEquals(actorId, responseBody.getString("actorId"));
+        assertEquals(actorName, responseBody.getString("name"));
+        assertTrue(responseBody.has("movies"));
+
+        // Verify the movies list is not empty and contains the correct movies
+        moviesArray = responseBody.getJSONArray("movies");
+        assertEquals(2, moviesArray.length());
+        boolean containsMovie1 = false;
+        boolean containsMovie2 = false;
+        for (int i = 0; i < moviesArray.length(); i++) {
+            String movieName = moviesArray.getString(i);
+            if (movieName.equals(movieId1)) {
+                containsMovie1 = true;
+            } else if (movieName.equals(movieId2)) {
+                containsMovie2 = true;
+            }
+        }
+        assertTrue(containsMovie1);
+        assertTrue(containsMovie2);
+
+        // Verify in Neo4j
+        try (Session session = Utils.driver.session()) {
+            StatementResult result = session.run(
+                    "MATCH (a:actor {id: $id})-[:ACTED_IN]->(m:movie) RETURN m.name as name",
+                    Values.parameters("id", actorId)
+            );
+            assertTrue(result.hasNext());
+            while (result.hasNext()) {
+                Record record = result.next();
+                String movieName = record.get("name").asString();
+                assertTrue(movieName.equals(movieName1) || movieName.equals(movieName2));
+            }
         }
     }
 
@@ -274,17 +350,16 @@ public class AppTest
 
         // Test case 2: Missing required field
         body = new JSONObject();
+        body.put("wow", "wow");
         response = sendRequest("getActor", "GET", body);
         assertEquals(400, response.getInt("statusCode"));
         assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
     }
 
     public void testGetMoviePass() throws Exception {
+        // Case 1: Movie with no one acted in it
         // Add Movie
-        JSONObject addBody = new JSONObject();
-        addBody.put("name", "Test Movie");
-        addBody.put("movieId", "tt1234567");
-        sendRequest("addMovie", "PUT", addBody);
+        addMovie("Test Movie", "tt1234567");
 
         // Get Movie
         JSONObject getBody = new JSONObject();
@@ -300,6 +375,10 @@ public class AppTest
         assertEquals("Test Movie", responseBody.getString("name"));
         assertTrue(responseBody.has("actors"));
 
+        // Verify the actors list is empty
+        JSONArray actorsArray = responseBody.getJSONArray("actors");
+        assertEquals(0, actorsArray.length());
+
         // Verify in Neo4j
         try (Session session = Utils.driver.session()) {
             StatementResult result = session.run(
@@ -310,13 +389,76 @@ public class AppTest
             Record record = result.next();
             assertEquals("Test Movie", record.get("name").asString());
         }
+
+        // Case 2: Movie with actors
+        String movieId = "tt2345678";
+        String movieName = "Another Test Movie";
+        addMovie(movieName, movieId);
+
+        // Add actors
+        String actorId1 = "nm1111111";
+        String actorName1 = "Actor One";
+        addActor(actorName1, actorId1);
+
+        String actorId2 = "nm2222222";
+        String actorName2 = "Actor Two";
+        addActor(actorName2, actorId2);
+
+        // Add relationships
+        addRelationship(actorId1, movieId);
+        addRelationship(actorId2, movieId);
+
+        // Get Movie
+        getBody = new JSONObject();
+        getBody.put("movieId", movieId);
+
+        response = sendRequest("getMovie", "GET", getBody);
+        assertEquals(200, response.getInt("statusCode"));
+
+        // Verify the response content
+        responseBody = new JSONObject(response.getString("body"));
+        assertEquals(movieId, responseBody.getString("movieId"));
+        assertEquals(movieName, responseBody.getString("name"));
+        assertTrue(responseBody.has("actors"));
+
+        // Verify the actors list is not empty and contains the correct actors
+        actorsArray = responseBody.getJSONArray("actors");
+        assertEquals(2, actorsArray.length());
+
+        boolean containsActor1 = false;
+        boolean containsActor2 = false;
+
+        for (int i = 0; i < actorsArray.length(); i++) {
+            String actorName = actorsArray.getString(i);
+            if (actorName.equals(actorId1)) {
+                containsActor1 = true;
+            } else if (actorName.equals(actorId2)) {
+                containsActor2 = true;
+            }
+        }
+
+        assertTrue(containsActor1);
+        assertTrue(containsActor2);
+
+        // Verify in Neo4j
+        try (Session session = Utils.driver.session()) {
+            StatementResult result = session.run(
+                    "MATCH (m:movie {id: $id})<-[:ACTED_IN]-(a:actor) RETURN a.name as name",
+                    Values.parameters("id", movieId)
+            );
+            assertTrue(result.hasNext());
+            while (result.hasNext()) {
+                Record record = result.next();
+                String actorName = record.get("name").asString();
+                assertTrue(actorName.equals(actorName1) || actorName.equals(actorName2));
+            }
+        }
     }
 
     public void testGetMovieFail() throws Exception {
         // Test case 1: Non-existent movie
         JSONObject body = new JSONObject();
         body.put("movieId", "tt9999999");
-
         JSONObject response = sendRequest("getMovie", "GET", body);
         assertEquals(404, response.getInt("statusCode"));
         assertEquals("Not Found: Movie does not exist", response.getString("body"));
@@ -330,10 +472,7 @@ public class AppTest
 
     public void testAddMovieRatingPass() throws Exception {
         // Add movie
-        JSONObject addBody = new JSONObject();
-        addBody.put("name", "Best Movie");
-        addBody.put("movieId", "tt1234567");
-        sendRequest("addMovie", "PUT", addBody);
+        addMovie("Best Movie", "tt1234567");
 
         // Case 1: Rate the movie
         JSONObject rateBody = new JSONObject();
@@ -345,7 +484,7 @@ public class AppTest
         assertEquals("OK: Movie rating added/updated successfully", response.getString("body"));
 
         // delay between writing and reading the rating
-        Thread.sleep(100);
+        Thread.sleep(700);
 
         // Verify in Neo4j
         try (Session session = Utils.driver.session()) {
@@ -369,7 +508,7 @@ public class AppTest
         assertEquals("OK: Movie rating added/updated successfully", response.getString("body"));
 
         // delay between writing and reading the rating
-        Thread.sleep(100);
+        Thread.sleep(700);
 
         // Verify updated rating in Neo4j
         try (Session session = Utils.driver.session()) {
@@ -386,6 +525,8 @@ public class AppTest
 
 
     public void testAddMovieRatingFail() throws Exception {
+        addMovie("w", "tt1234567");
+
         // Test case 1: Invalid rating (outside range)
         JSONObject body = new JSONObject();
         body.put("movieId", "tt1234567");
@@ -432,17 +573,6 @@ public class AppTest
         assertEquals("Movie2", movies.getJSONObject(0).getString("name"));
     }
 
-    private void addMovieWithRating(String name, String movieId, double rating) throws Exception {
-        JSONObject addBody = new JSONObject();
-        addBody.put("name", name);
-        addBody.put("movieId", movieId);
-        sendRequest("addMovie", "PUT", addBody);
-
-        JSONObject rateBody = new JSONObject();
-        rateBody.put("movieId", movieId);
-        rateBody.put("rating", rating);
-        sendRequest("addMovieRating", "PUT", rateBody);
-    }
 
 
     public void testGetMoviesByRatingFail() throws Exception {
@@ -483,7 +613,7 @@ public class AppTest
         assertEquals(200, response.getInt("statusCode"));
         assertEquals("OK: Relationship added successfully", response.getString("body"));
 
-        Thread.sleep(100);
+        Thread.sleep(700);
 
         // Verify relationship in Neo4j
         try (Session session = Utils.driver.session()) {
@@ -497,9 +627,10 @@ public class AppTest
 
     public void testAddRelationshipFail() throws Exception {
         // Test case 1: Non-existent actor
+        addMovie("Wow", "tt1");
         JSONObject body = new JSONObject();
         body.put("actorId", "nm9999999");
-        body.put("movieId", "tt1234567");
+        body.put("movieId", "tt1");
 
         JSONObject response = sendRequest("addRelationship", "PUT", body);
         assertEquals(404, response.getInt("statusCode"));
@@ -508,15 +639,15 @@ public class AppTest
         // Test case 2: Duplicate relationship
         addActor("John Doe", "nm1234567");
         addMovie("Test Movie", "tt1234567");
+        body = new JSONObject();
         body.put("actorId", "nm1234567");
         body.put("movieId", "tt1234567");
-        sendRequest("addRelationship", "PUT", body);
-
-        response = sendRequest("addRelationship", "PUT", body);
+        sendRequest("addRelationship", "PUT", body); // 1st add
+        response = sendRequest("addRelationship", "PUT", body); // 2nd add
         assertEquals(400, response.getInt("statusCode"));
         assertEquals("Bad Request: Relationship already exists", response.getString("body"));
 
-        Thread.sleep(100);
+        Thread.sleep(700);
 
         try (Session session = Utils.driver.session()) {
             StatementResult result = session.run(
@@ -542,15 +673,12 @@ public class AppTest
         assertEquals("Not Found: Actor and/or movie does not exist", response.getString("body"));
     }
 
-
     public void testHasRelationshipPass() throws Exception {
         addActor("John Doe", "nm1234567");
         addMovie("Test Movie", "tt1234567");
-        JSONObject addRelBody = new JSONObject();
-        addRelBody.put("actorId", "nm1234567");
-        addRelBody.put("movieId", "tt1234567");
-        sendRequest("addRelationship", "PUT", addRelBody);
+        addRelationship("nm1234567", "tt1234567");
 
+        // Test case 1: Actor and movie exist with relationship
         JSONObject body = new JSONObject();
         body.put("actorId", "nm1234567");
         body.put("movieId", "tt1234567");
@@ -562,10 +690,23 @@ public class AppTest
         assertEquals("nm1234567", responseBody.getString("actorId"));
         assertEquals("tt1234567", responseBody.getString("movieId"));
         assertTrue(responseBody.getBoolean("hasRelationship"));
+
+        // Test case 2: Actor and movie exist but no relationship
+        addActor("A", "acted123");
+        addMovie("B", "movie123");
+        body.put("actorId", "acted123");
+        body.put("movieId", "movie123");
+        response = sendRequest("hasRelationship", "GET", body);
+        assertEquals(200, response.getInt("statusCode"));
+        responseBody = new JSONObject(response.getString("body"));
+        assertFalse(responseBody.getBoolean("hasRelationship"));
     }
 
     public void testHasRelationshipFail() throws Exception {
-        // Test case 1: Non-existent actor
+        addActor("wow", "act123");
+        addMovie("movie", "movie123");
+
+        // Test case 1: Non-existent actor & movie
         JSONObject body = new JSONObject();
         body.put("actorId", "nm9999999");
         body.put("movieId", "tt1234567");
@@ -574,22 +715,30 @@ public class AppTest
         assertEquals(404, response.getInt("statusCode"));
         assertEquals("Not Found: Actor or Movie does not exist", response.getString("body"));
 
-        // Test case 2: Missing required field
+        // Test case 2: Non-existent actor
+        body = new JSONObject();
+        body.put("actorId", "nm9999999");
+        body.put("movieId", "movie123");
+
+        response = sendRequest("hasRelationship", "GET", body);
+        assertEquals(404, response.getInt("statusCode"));
+        assertEquals("Not Found: Actor or Movie does not exist", response.getString("body"));
+
+        // Test case 3: Non-existent movie
+        body = new JSONObject();
+        body.put("actorId", "act123");
+        body.put("movieId", "wowww");
+
+        response = sendRequest("hasRelationship", "GET", body);
+        assertEquals(404, response.getInt("statusCode"));
+        assertEquals("Not Found: Actor or Movie does not exist", response.getString("body"));
+
+        // Test case 4: Missing required field
         body = new JSONObject();
         body.put("actorId", "nm1234567");
         response = sendRequest("hasRelationship", "GET", body);
         assertEquals(400, response.getInt("statusCode"));
         assertEquals("Bad Request: Malformed JSON or missing required fields", response.getString("body"));
-
-        // Test case 3: Actor and movie exist but no relationship
-        addActor("John Doe", "nm1234567");
-        addMovie("Test Movie", "tt1234567");
-        body.put("actorId", "nm1234567");
-        body.put("movieId", "tt1234567");
-        response = sendRequest("hasRelationship", "GET", body);
-        assertEquals(200, response.getInt("statusCode"));
-        JSONObject responseBody = new JSONObject(response.getString("body"));
-        assertFalse(responseBody.getBoolean("hasRelationship"));
     }
 
     public void testComputeBaconNumberPass() throws Exception {
@@ -773,7 +922,6 @@ public class AppTest
         // Test case 1: Non-existent actor
         JSONObject body = new JSONObject();
         body.put("actorId", "nm9999999");
-
         JSONObject response = sendRequest("getActorNetwork", "GET", body);
         assertEquals(404, response.getInt("statusCode"));
         assertEquals("Not Found: Actor does not exist", response.getString("body"));
@@ -895,7 +1043,7 @@ public class AppTest
         addRelationship("nm0000102", "tt0000002");
         addRelationship("nm0000001", "tt0000002");
 
-        // Test case 2: Negative limit
+        // Test case 1: Negative limit
         JSONObject response = sendRequest("getConnectStats", "GET", new JSONObject()
                 .put("limit", -1)
                 .put("most", true));

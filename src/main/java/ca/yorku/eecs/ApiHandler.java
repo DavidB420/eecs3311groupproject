@@ -49,26 +49,10 @@ public class ApiHandler implements HttpHandler {
                     new GetActorNetworkHandler().handle(exchange);
                     break;
                 default:
-                    notFound(exchange);
+                    Utils.sendResponse(exchange, 404, "Not Found");
             }
         } catch (Exception e) {
-            internalServerError(exchange, e);
+            Utils.sendResponse(exchange, 500, "Internal Server Error: " + e.getMessage());
         }
-    }
-
-    private void notFound(HttpExchange exchange) throws IOException {
-        String response = "Not Found";
-        exchange.sendResponseHeaders(404, response.length());
-        OutputStream os = exchange.getResponseBody();
-        os.write(response.getBytes());
-        os.close();
-    }
-
-    private void internalServerError(HttpExchange exchange, Exception e) throws IOException {
-        String response = "Internal Server Error: " + e.getMessage();
-        exchange.sendResponseHeaders(500, response.length());
-        OutputStream os = exchange.getResponseBody();
-        os.write(response.getBytes());
-        os.close();
     }
 }

@@ -5,7 +5,17 @@ import java.io.OutputStream;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 
+/**
+ * Main API handler that routes requests to specific endpoint handlers based on the request path.
+ */
 public class ApiHandler implements HttpHandler {
+
+    /**
+     * Handles the HTTP request by routing it to the appropriate endpoint handler.
+     *
+     * @param exchange The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();

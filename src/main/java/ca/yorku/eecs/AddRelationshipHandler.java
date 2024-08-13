@@ -12,10 +12,20 @@ import org.neo4j.driver.v1.Values;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
+/**
+ * Handles HTTP PUT requests to add a relationship between an actor and a movie in the database.
+ * This handler checks if both the actor and movie exist, and if the relationship doesn't already exist.
+ */
 public class AddRelationshipHandler implements HttpHandler {
 
 	private final String relationship = "ACTED_IN";
 
+	/**
+	 * Handles the HTTP request.
+	 *
+	 * @param r The HttpExchange object representing the request and response.
+	 * @throws IOException If an I/O error occurs.
+	 */
 	@Override
 	public void handle(HttpExchange r) throws IOException {
 		try {
@@ -30,6 +40,13 @@ public class AddRelationshipHandler implements HttpHandler {
 		}
 	}
 
+	/**
+	 * Processes the PUT request to add a relationship between an actor and a movie.
+	 *
+	 * @param r The HttpExchange object representing the request and response.
+	 * @throws IOException If an I/O error occurs.
+	 * @throws JSONException If there's an error parsing the JSON request body.
+	 */
 	private void handlePut(HttpExchange r) throws IOException, JSONException {
 		String body = Utils.convert(r.getRequestBody());
 		JSONObject jo;

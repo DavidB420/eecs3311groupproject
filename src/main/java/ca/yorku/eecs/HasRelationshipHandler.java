@@ -10,7 +10,18 @@ import org.neo4j.driver.v1.*;
 import java.io.IOException;
 import java.io.OutputStream;
 
+/**
+ * Handles HTTP GET requests to check if a relationship exists between an actor and a movie in the database.
+ * This handler verifies the existence of both the actor and movie, then checks for an "ACTED_IN" relationship.
+ */
 public class HasRelationshipHandler implements HttpHandler {
+
+    /**
+     * Handles the HTTP request.
+     *
+     * @param exchange The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         try {
@@ -26,6 +37,13 @@ public class HasRelationshipHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Processes the GET request to check for a relationship between an actor and a movie.
+     *
+     * @param exchange The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     * @throws JSONException If there's an error parsing the JSON request body or creating the JSON response.
+     */
     public void handleGet(HttpExchange exchange) throws IOException, JSONException{
         String body = Utils.convert(exchange.getRequestBody());
         JSONObject jo;
@@ -65,6 +83,14 @@ public class HasRelationshipHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Checks if a relationship exists between an actor and a movie.
+     *
+     * @param tx The database transaction.
+     * @param mId The movie ID.
+     * @param aId The actor ID.
+     * @return true if a relationship exists, false otherwise.
+     */
     private boolean checkRelationship(Transaction tx, String mId, String aId){
         try{
             StatementResult resultQuery = tx.run("MATCH (a:actor {id: $actorId})-[r:ACTED_IN]->(m:movie {id: $movieId}) RETURN COUNT(r) > 0 as hasRelationship",

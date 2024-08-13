@@ -16,11 +16,20 @@ import org.neo4j.driver.v1.Values;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
+/**
+ * Handles HTTP GET requests to retrieve the network of actors who have co-acted with a given actor.
+ * This handler fetches all actors who have appeared in movies with the specified actor.
+ */
 public class GetActorNetworkHandler implements HttpHandler {
 
+    /**
+     * Handles the HTTP request.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     */
 	@Override
 	public void handle(HttpExchange r) throws IOException {
-		// TODO Auto-generated method stub
 		try {
 			if (r.getRequestMethod().equals("GET")) {
 				handleGet(r);
@@ -34,6 +43,14 @@ public class GetActorNetworkHandler implements HttpHandler {
 		}
 
 	}
+
+    /**
+     * Processes the GET request to retrieve the actor's network.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     * @throws JSONException If there's an error parsing the JSON request body or creating the JSON response.
+     */
 
     private void handleGet(HttpExchange r) throws IOException, JSONException {
         String body = Utils.convert(r.getRequestBody());

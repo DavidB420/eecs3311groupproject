@@ -12,9 +12,19 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Handles HTTP GET requests to compute the Bacon number for a given actor.
+ * The Bacon number represents the degree of separation between an actor and Kevin Bacon.
+ */
 public class ComputeBaconNumberHandler implements HttpHandler {
     private static final String KEVIN_BACON_ID = "nm0000102";
 
+    /**
+     * Handles the HTTP request.
+     *
+     * @param exchange The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         try {
@@ -30,6 +40,13 @@ public class ComputeBaconNumberHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Processes the GET request to compute the Bacon number for a given actor.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     * @throws JSONException If there's an error parsing the JSON request body or creating the JSON response.
+     */
     private void handleGet(HttpExchange r) throws IOException, JSONException {
         String body = Utils.convert(r.getRequestBody());
         JSONObject jo;

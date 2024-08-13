@@ -20,8 +20,8 @@ public class ApiHandler implements HttpHandler {
     public void handle(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
 
-        // Remove the "/api/v1" prefix from the path
-        String endpoint = path.substring("/api/v1".length());
+        // Remove the "/api/v1" prefix from the path and any trailing slash
+        String endpoint = path.substring("/api/v1".length()).replaceAll("/$", "");
 
         try {
             switch (endpoint) {

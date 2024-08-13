@@ -12,8 +12,18 @@ import org.neo4j.driver.v1.Values;
 import java.io.IOException;
 import java.io.OutputStream;
 
+/**
+ * Handles HTTP PUT requests to add a new actor to the database.
+ * This handler checks if the actor already exists and adds them if they don't.
+ */
 public class AddActorHandler implements HttpHandler {
 
+    /**
+     * Handles the HTTP request.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override
     public void handle(HttpExchange r) throws IOException {
         try {
@@ -29,6 +39,13 @@ public class AddActorHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Processes the PUT request to add a new actor.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     * @throws JSONException If there's an error parsing the JSON request body.
+     */
     private void handlePut(HttpExchange r) throws IOException, JSONException {
         String body = Utils.convert(r.getRequestBody());
         JSONObject jo;

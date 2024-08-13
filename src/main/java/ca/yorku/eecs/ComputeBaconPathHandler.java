@@ -11,9 +11,19 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Handles HTTP GET requests to compute the Bacon path for a given actor.
+ * The Bacon path is the shortest path of actor-movie connections from the given actor to Kevin Bacon.
+ */
 public class ComputeBaconPathHandler implements HttpHandler {
     private static final String KEVIN_BACON_ID = "nm0000102";
 
+    /**
+     * Handles the HTTP request.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override
     public void handle(HttpExchange r) throws IOException {
         try {
@@ -28,6 +38,13 @@ public class ComputeBaconPathHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Processes the GET request to compute the Bacon path for a given actor.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     * @throws JSONException If there's an error parsing the JSON request body or creating the JSON response.
+     */
     private void handleGet(HttpExchange r) throws IOException, JSONException {
         String body = Utils.convert(r.getRequestBody());
         JSONObject jo;
@@ -56,6 +73,13 @@ public class ComputeBaconPathHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Computes the Bacon path for a given actor using the Neo4j database.
+     *
+     * @param session The Neo4j database session.
+     * @param actorId The ID of the actor for whom to compute the Bacon path.
+     * @return A list of actor and movie IDs representing the Bacon path, or null if no path exists.
+     */
     protected static List<String> computeBaconPath(Session session, String actorId) {
         if (actorId.equals(KEVIN_BACON_ID)) {
             return Collections.singletonList(KEVIN_BACON_ID);

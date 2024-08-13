@@ -11,7 +11,17 @@ import org.neo4j.driver.v1.Record;
 import java.io.IOException;
 import java.io.OutputStream;
 
+/**
+ * Handles HTTP GET requests to retrieve movie from the database.
+ * This handler fetches movie details including its name and associated actors.
+ */
 public class GetMovieHandler implements HttpHandler {
+    /**
+     * Handles the HTTP request.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override
     public void handle(HttpExchange r) throws IOException {
         try {
@@ -27,6 +37,13 @@ public class GetMovieHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Processes the GET request to retrieve movie information.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     * @throws JSONException If there's an error parsing the JSON request body or creating the JSON response.
+     */
     private void handleGet(HttpExchange r) throws IOException, JSONException {
         String body = Utils.convert(r.getRequestBody());
         JSONObject jo;

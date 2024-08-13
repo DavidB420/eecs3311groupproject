@@ -8,8 +8,18 @@ import org.neo4j.driver.v1.*;
 
 import java.io.IOException;
 
+/**
+ * Handles HTTP PUT requests to add or update a movie rating in the database.
+ * This handler checks if the movie exists and adds/updates its rating.
+ */
 public class AddMovieRatingHandler implements HttpHandler {
 
+    /**
+     * Handles the HTTP request.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override
     public void handle(HttpExchange r) throws IOException {
         try {
@@ -24,6 +34,13 @@ public class AddMovieRatingHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Processes the PUT request to add or update a movie rating.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     * @throws JSONException If there's an error parsing the JSON request body.
+     */
     private void handlePut(HttpExchange r) throws IOException, JSONException {
         String body = Utils.convert(r.getRequestBody());
         JSONObject jo;

@@ -12,8 +12,18 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Handles HTTP GET requests to retrieve statistics about actor connections.
+ * This handler can return either the most or least connected actors, up to a specified limit.
+ */
 public class GetConnectStatsHandler implements HttpHandler {
 
+    /**
+     * Handles the HTTP request.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override
     public void handle(HttpExchange r) throws IOException {
         try {
@@ -28,6 +38,13 @@ public class GetConnectStatsHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Processes the GET request to retrieve actor connection statistics.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     * @throws JSONException If there's an error parsing the JSON request body or creating the JSON response.
+     */
     private void handleGet(HttpExchange r) throws IOException, JSONException {
         String body = Utils.convert(r.getRequestBody());
         JSONObject jo = new JSONObject(body);
@@ -51,6 +68,15 @@ public class GetConnectStatsHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Retrieves connection statistics for actors from the database.
+     *
+     * @param session The Neo4j database session.
+     * @param limit The maximum number of actors to return.
+     * @param most If true, return the most connected actors; if false, return the least connected actors.
+     * @return A list of JSONObjects containing actor IDs and their connection counts.
+     * @throws JSONException If there's an error creating the JSON objects.
+     */
     private List<JSONObject> getConnectStats(Session session, int limit, boolean most) throws JSONException {
         String query =
                         "MATCH (a:actor) " +

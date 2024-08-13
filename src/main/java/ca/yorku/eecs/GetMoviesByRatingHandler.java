@@ -12,7 +12,18 @@ import org.neo4j.driver.v1.Values;
 
 import java.io.IOException;
 
+/**
+ * Handles HTTP GET requests to retrieve movies within a specified rating range from the database.
+ * This handler fetches and returns a list of movies sorted by their ratings in descending order.
+ */
 public class GetMoviesByRatingHandler implements HttpHandler {
+
+    /**
+     * Handles the HTTP request.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override
     public void handle(HttpExchange r) throws IOException {
         try {
@@ -28,6 +39,13 @@ public class GetMoviesByRatingHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Processes the GET request to retrieve movies within a specified rating range.
+     *
+     * @param r The HttpExchange object representing the request and response.
+     * @throws IOException If an I/O error occurs.
+     * @throws JSONException If there's an error parsing the JSON request body or creating the JSON response.
+     */
     private void handleGet(HttpExchange r) throws IOException, JSONException {
         String body = Utils.convert(r.getRequestBody());
         JSONObject jo;

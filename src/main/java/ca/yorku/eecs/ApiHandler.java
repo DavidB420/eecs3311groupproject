@@ -20,46 +20,49 @@ public class ApiHandler implements HttpHandler {
     public void handle(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
 
+        // Remove the "/api/v1" prefix from the path
+        String endpoint = path.substring("/api/v1".length());
+
         try {
-            switch (path) {
-                case "/api/v1/addActor":
+            switch (endpoint) {
+                case "/addActor":
                     new AddActorHandler().handle(exchange);
                     break;
-                case "/api/v1/addMovie":
+                case "/addMovie":
                     new AddMovieHandler().handle(exchange);
                     break;
-                case "/api/v1/addRelationship":
+                case "/addRelationship":
                     new AddRelationshipHandler().handle(exchange);
                     break;
-                case "/api/v1/getActor":
+                case "/getActor":
                     new GetActorHandler().handle(exchange);
                     break;
-                case "/api/v1/getMovie":
+                case "/getMovie":
                     new GetMovieHandler().handle(exchange);
                     break;
-                case "/api/v1/hasRelationship":
+                case "/hasRelationship":
                     new HasRelationshipHandler().handle(exchange);
                     break;
-                case "/api/v1/computeBaconNumber":
+                case "/computeBaconNumber":
                     new ComputeBaconNumberHandler().handle(exchange);
                     break;
-                case "/api/v1/computeBaconPath":
+                case "/computeBaconPath":
                     new ComputeBaconPathHandler().handle(exchange);
                     break;
-                case "/api/v1/addMovieRating":
+                case "/addMovieRating":
                     new AddMovieRatingHandler().handle(exchange);
                     break;
-                case "/api/v1/getMoviesByRating":
+                case "/getMoviesByRating":
                     new GetMoviesByRatingHandler().handle(exchange);
                     break;
-                case "/api/v1/getConnectStats":
+                case "/getConnectStats":
                     new GetConnectStatsHandler().handle(exchange);
                     break;
-                case "/api/v1/getActorNetwork":
+                case "/getActorNetwork":
                     new GetActorNetworkHandler().handle(exchange);
                     break;
                 default:
-                    Utils.sendResponse(exchange, 404, "Not Found");
+                    Utils.sendResponse(exchange, 404, "Not Found: " + endpoint);
             }
         } catch (Exception e) {
             Utils.sendResponse(exchange, 500, "Internal Server Error: " + e.getMessage());
